@@ -3,10 +3,11 @@ import requests
 
 # --- 1. CONFIG & TOKENS ---
 HF_TOKEN = st.secrets["HUGGINGFACE_TOKEN"] 
-MODEL_ID = "Qwen/Qwen3.5-4B-Instruct" 
 
-# Using the Model-Specific v1 Endpoint (Most stable for 404 errors)
-API_URL = f"https://api-inference.huggingface.co/models/{MODEL_ID}/v1/chat/completions"
+# This is the exact URL the Error 410 is asking for:
+API_URL = "https://router.huggingface.co/hf-inference/v1/chat/completions"
+# We will try the 7B model because it's more likely to be "awake" on the Router
+MODEL_ID = "Qwen/Qwen2.5-7B-Instruct" 
 
 headers = {
     "Authorization": f"Bearer {HF_TOKEN}",
@@ -16,14 +17,10 @@ headers = {
 st.set_page_config(page_title="Qwen3.5 Urdu-Russian Mentor", layout="centered")
 
 # --- 2. THE SYSTEM PROMPT ---
-system_instruction = """
-You are a professional Russian Mentor for Urdu speakers. 
-1. Explain grammar using Urdu analogies.
-2. Provide Russian Cyrillic + Urdu Phonetics + English translation.
-"""
+system_instruction = "You are a Russian teacher. Explain in Urdu and English. Provide Cyrillic and Phonetics."
 
 # --- 3. UI ---
-st.title("🇷🇺 Qwen3.5 Pro Mentor")
+st.title("🇷🇺 Russian Mentor")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -32,20 +29,21 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Ask: I am eating in Russian"):
+if prompt := st.chat_input("Type here..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # --- 4. THE CALL ---
-    with st.spinner("Talking to Qwen3.5..."):
+    # --- 4. THE ROUTER CALL ---
+    with st.spinner("Connecting..."):
         payload = {
-            "model": "tgi", # This tells Hugging Face to use the Text Generation Inference engine
+            "model": MODEL_ID,
             "messages": [
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 500
+            "max_tokens": 500,
+            "stream": False
         }
 
         try:
@@ -58,9 +56,6 @@ if prompt := st.chat_input("Ask: I am eating in Russian"):
                     st.markdown(ai_text)
                 st.session_state.messages.append({"role": "assistant", "content": ai_text})
             else:
-                st.error(f"Error {response.status_code}: {response.text}")
-                st.info("If you see 404, the model might be temporarily offline. Try again in 2 minutes.")
-
+                st.error(f"Router Error {response.status_code}: {response.text}")
         except Exception as e:
-            st.error(f"Connection failed: {e}")
-            
+            st.error(f"Failed: {e}")
