@@ -4,7 +4,8 @@ import requests
 # --- 1. CONFIG & TOKENS ---
 HF_TOKEN = st.secrets["HUGGINGFACE_TOKEN"] 
 
-# The specific 2026 Router endpoint
+# In 2026, the Router often requires the 'hf-internal' or direct path
+# We will use the most compatible version:
 MODEL_ID = "Qwen/Qwen3.5-4B-Instruct" 
 API_URL = "https://router.huggingface.co/hf-inference/v1/chat/completions"
 
@@ -17,38 +18,31 @@ st.set_page_config(page_title="Qwen3.5 Urdu-Russian Mentor", layout="centered")
 
 # --- 2. THE SYSTEM PROMPT ---
 system_instruction = """
-You are a professional Russian Mentor for Urdu speakers. 
-1. Explain grammar using Urdu analogies.
-2. Provide Russian Cyrillic + Urdu Phonetics + English translation.
-3. Example: [Привет] - [پریویت] - [Hello].
+You are a 'Thinking' AI Mentor. You teach Russian to Urdu speakers using English for clarity.
+Provide the translation:
+- [Russian Cyrillic]
+- [Urdu Phonetics]
+- [English Meaning]
+Explain the grammar in Urdu (e.g., how 'Eating' changes for 'I' vs 'He').
 """
 
-# --- 3. UI LAYOUT ---
+# --- 3. UI ---
 st.title("🇷🇺 Qwen3.5 Pro Mentor")
-st.subheader("Urdu-Russian Language Assistant")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Sidebar
-with st.sidebar:
-    if st.button("Clear Conversation"):
-        st.session_state.messages = []
-        st.rerun()
-
-# Display Chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# User Input
-if prompt := st.chat_input("Ask: How to say 'I am eating' in Russian?"):
+if prompt := st.chat_input("Ask: I am eating in Russian"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     # --- 4. THE ROUTER CALL ---
-    with st.spinner("Connecting to Qwen3.5..."):
+    with st.spinner("Connecting to Hugging Face Router..."):
         payload = {
             "model": MODEL_ID,
             "messages": [
@@ -60,6 +54,7 @@ if prompt := st.chat_input("Ask: How to say 'I am eating' in Russian?"):
         }
 
         try:
+            # We use a POST request to the V1 Chat endpoint
             response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
             
             if response.status_code == 200:
@@ -68,10 +63,10 @@ if prompt := st.chat_input("Ask: How to say 'I am eating' in Russian?"):
                 with st.chat_message("assistant"):
                     st.markdown(ai_text)
                 st.session_state.messages.append({"role": "assistant", "content": ai_text})
-            elif response.status_code == 410:
-                st.error("The API endpoint has changed again. Please check Hugging Face documentation.")
             else:
-                st.error(f"Error {response.status_code}: {response.text}")
+                # This will show us EXACTLY what the server is complaining about
+                st.error(f"Router Error {response.status_code}: {response.text}")
+                st.info("Try checking if your Hugging Face Token has 'Read' permissions.")
 
         except Exception as e:
             st.error(f"Connection failed: {e}")
