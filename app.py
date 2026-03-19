@@ -2,12 +2,11 @@ import streamlit as st
 import requests
 
 # --- 1. CONFIG & TOKENS ---
-# Ensure 'HUGGINGFACE_TOKEN' is set in your Streamlit Cloud Secrets
 HF_TOKEN = st.secrets["HUGGINGFACE_TOKEN"] 
 
-# This is the 2026 standard for Qwen 3.5 on Hugging Face
+# The specific 2026 Router endpoint
 MODEL_ID = "Qwen/Qwen3.5-4B-Instruct" 
-API_URL = "https://api-inference.huggingface.co/v1/chat/completions"
+API_URL = "https://router.huggingface.co/hf-inference/v1/chat/completions"
 
 headers = {
     "Authorization": f"Bearer {HF_TOKEN}",
@@ -18,32 +17,26 @@ st.set_page_config(page_title="Qwen3.5 Urdu-Russian Mentor", layout="centered")
 
 # --- 2. THE SYSTEM PROMPT ---
 system_instruction = """
-You are a 'Thinking' AI Mentor. You teach Russian to Urdu speakers using English for clarity.
-For every request:
-1. First, provide a very brief 'Grammar Logic' explanation.
-2. Provide the translation clearly:
-   - [Russian Cyrillic]
-   - [Urdu Phonetics]
-   - [English Meaning]
-3. Explain the grammar in simple Urdu (e.g., comparing Russian cases to Urdu 'ka/ki/ko').
+You are a professional Russian Mentor for Urdu speakers. 
+1. Explain grammar using Urdu analogies.
+2. Provide Russian Cyrillic + Urdu Phonetics + English translation.
+3. Example: [Привет] - [پریویت] - [Hello].
 """
 
 # --- 3. UI LAYOUT ---
 st.title("🇷🇺 Qwen3.5 Pro Mentor")
-st.subheader("Learn Russian through Urdu & English")
+st.subheader("Urdu-Russian Language Assistant")
 
-# Sidebar for controls
-with st.sidebar:
-    if st.button("Clear Chat History"):
-        st.session_state.messages = []
-        st.rerun()
-    st.info("Using Qwen3.5-4B via Hugging Face Cloud")
-
-# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
+# Sidebar
+with st.sidebar:
+    if st.button("Clear Conversation"):
+        st.session_state.messages = []
+        st.rerun()
+
+# Display Chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -54,15 +47,15 @@ if prompt := st.chat_input("Ask: How to say 'I am eating' in Russian?"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # --- 4. CLOUD CALL (API REQUEST) ---
-    with st.spinner("AI is thinking..."):
+    # --- 4. THE ROUTER CALL ---
+    with st.spinner("Connecting to Qwen3.5..."):
         payload = {
             "model": MODEL_ID,
             "messages": [
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 1000,
+            "max_tokens": 500,
             "temperature": 0.7
         }
 
@@ -75,17 +68,10 @@ if prompt := st.chat_input("Ask: How to say 'I am eating' in Russian?"):
                 with st.chat_message("assistant"):
                     st.markdown(ai_text)
                 st.session_state.messages.append({"role": "assistant", "content": ai_text})
-            
-            elif response.status_code == 503:
-                st.warning("The model is waking up on the server. Please wait 15-30 seconds and try again.")
-            
-            elif response.status_code == 401:
-                st.error("Invalid Token! Check your Streamlit Secrets.")
-            
+            elif response.status_code == 410:
+                st.error("The API endpoint has changed again. Please check Hugging Face documentation.")
             else:
-                st.error(f"Server Error {response.status_code}: {response.text}")
+                st.error(f"Error {response.status_code}: {response.text}")
 
-        except requests.exceptions.Timeout:
-            st.error("The request timed out. Please try again.")
         except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
+            st.error(f"Connection failed: {e}")
